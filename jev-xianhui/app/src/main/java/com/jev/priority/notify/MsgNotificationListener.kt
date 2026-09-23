@@ -76,6 +76,9 @@ class MsgNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // 计数放在所有过滤之前：只看列表分不清「没收到通知」和「收到但被过滤」。
+        NotificationListenerHolder.seenCount++
+
         val pkg = sbn.packageName ?: return
         val watch = prefs.watchPkgs
         if (watch.isNotEmpty() && pkg !in watch) return
@@ -105,6 +108,7 @@ class MsgNotificationListener : NotificationListenerService() {
         item.sbnKey = sbn.key
 
         MsgStore.upsert(item)
+        NotificationListenerHolder.acceptedCount++
 
         if (prefs.autoJudge && prefs.apiKey.isNotBlank()) {
             judgeAsync(item)
@@ -141,6 +145,9 @@ class MsgNotificationListener : NotificationListenerService() {
             reason == NotificationListenerService.REASON_CANCEL_ALL ||
             reason == NotificationListenerService.REASON_CLICK ||
             reason == NotificationListenerService.REASON_LISTENER_CANCEL
+        // reason 的取值是诊断「消息为什么消失」的唯一线索，打出来才能定位。
+        Log.i(TAG, "removed pkg=${sbn.packageName} reason=$reason " +
+            "userHandled=$userHandled backgroundOnly=${prefs.backgroundOnly}")
         if (prefs.backgroundOnly || userHandled) dropRow(sbn)
     }
 
@@ -158,6 +165,7 @@ class MsgNotificationListener : NotificationListenerService() {
         // stale cancel cannot wipe a newer message from the same conversation.
         if (current != null && current.text == body) {
             MsgStore.remove(key)
+            NotificationListenerHolder.droppedCount++
         }
     }
 

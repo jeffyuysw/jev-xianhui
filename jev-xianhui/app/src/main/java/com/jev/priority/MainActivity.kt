@@ -3,6 +3,8 @@ package com.jev.priority
 import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.AppOpsManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -17,6 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -29,6 +32,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.jev.priority.core.MsgStore
 import com.jev.priority.core.Prefs
@@ -39,6 +43,7 @@ import com.jev.priority.notify.NotificationListenerHolder
 import com.jev.priority.overlay.OverlayHolder
 import com.jev.priority.overlay.OverlayPalette
 import com.jev.priority.overlay.PriorityOverlay
+import com.jev.priority.update.UpdateChecker
 import kotlin.concurrent.thread
 
 /**
@@ -60,6 +65,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatusSummary: TextView
     private lateinit var statusDot: View
     private lateinit var tvListenerStatus: TextView
+    private lateinit var tvNotifyStats: TextView
     private lateinit var tvNotifyStatus: TextView
     private lateinit var tvOverlayStatus: TextView
     private lateinit var tvKeyStatus: TextView
@@ -132,6 +138,7 @@ class MainActivity : AppCompatActivity() {
         tvStatusSummary = findViewById(R.id.tvStatusSummary)
         statusDot = findViewById(R.id.statusDot)
         tvListenerStatus = findViewById(R.id.tvListenerStatus)
+        tvNotifyStats = findViewById(R.id.tvNotifyStats)
         tvNotifyStatus = findViewById(R.id.tvNotifyStatus)
         tvOverlayStatus = findViewById(R.id.tvOverlayStatus)
         tvKeyStatus = findViewById(R.id.tvKeyStatus)
@@ -147,7 +154,7 @@ class MainActivity : AppCompatActivity() {
 
         runCatching {
             findViewById<TextView>(R.id.tvVersion).text =
-                "版本 ${packageManager.getPackageInfo(packageName, 0).versionName}"
+                "v${packageManager.getPackageInfo(packageName, 0).versionName}"
         }
 
         btnNotifyPerm.setOnClickListener {
@@ -248,7 +255,10 @@ class MainActivity : AppCompatActivity() {
         // 避免用户自己在层层的系统设置里翻。
         btnAutostart.setOnClickListener { showKeepAliveOptions() }
 
-        findViewById<Button>(R.id.btnClear).setOnClickListener {            val n = MsgStore.size()
+        findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener { checkForUpdate() }
+
+        findViewById<Button>(R.id.btnClear).setOnClickListener {
+            val n = MsgStore.size()
             if (n == 0) {
                 Toast.makeText(this, "列表已经是空的", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -560,6 +570,8 @@ class MainActivity : AppCompatActivity() {
             overlay.show()
         }
         syncStates()
+        // 用户可能刚去「安装未知应用」权限页开了权限，回来直接把安装界面续上。
+        resumePendingInstall()
         // 兜底刷新：部分 ROM 的权限写入是异步的，且回调可能缺失。
         // 在三个时间点各刷一次，把「明明开了却显示未开启」的窗口压到最短。
         // 挂在 mainHandler 上而不是 decorView 上，这样 onDestroy 的
@@ -604,8 +616,8 @@ class MainActivity : AppCompatActivity() {
         statusDot.background = dot(if (done == 3) "#639922" else "#E24B4A")
         tvStatusSummary.text = when {
             done < 3 -> "还差 ${3 - done} 步就能用了"
-            !batteryOn -> "基本就绪 —— 建议再设一下自启动 + 省电无限制，否则后台可能被冻结"
-            else -> "全部就绪，正在为你判断消息"
+            !batteryOn -> "就绪 —— 建议再设一下自启动 + 省电无限制"
+            else -> "全部就绪"
         }
 
         // Live queue readout, so the user can see the app is actually working
@@ -614,7 +626,7 @@ class MainActivity : AppCompatActivity() {
         val urgent = MsgStore.countNow()
         findViewById<TextView>(R.id.tvQueueCount).text = when {
             queue == 0 -> "当前没有待处理的消息"
-            urgent > 0 -> "当前 $queue 条待处理，其中 $urgent 条要马上回"
+            urgent > 0 -> "当前 $queue 条待处理，$urgent 条要马上回"
             else -> "当前 $queue 条待处理"
         }
 
@@ -627,9 +639,15 @@ class MainActivity : AppCompatActivity() {
         tvListenerStatus.text = if (bound) {
             "监听服务：已连接"
         } else {
-            "监听服务：未连接 —— 通常几秒内自动恢复；持续未恢复请重新打开「通知使用权」，或重启手机"
+            "监听服务：未连接（通常几秒内自动恢复）"
         }
         tvListenerStatus.setTextColor(Color.parseColor(if (bound) "#3B6D11" else "#A32D2D"))
+
+        // 自查用：把「系统给了几条通知」和「有几条进了列表」分开显示。
+        // 一直不动说明系统没把通知交过来；在涨但列表空说明是被过滤或立刻被移出了。
+        tvNotifyStats.text = "本次收到通知 ${NotificationListenerHolder.seenCount} 条，" +
+            "进入列表 ${NotificationListenerHolder.acceptedCount} 条，" +
+            "移出 ${NotificationListenerHolder.droppedCount} 条"
     }
 
     /**
@@ -736,6 +754,130 @@ class MainActivity : AppCompatActivity() {
         getSystemService(PowerManager::class.java)
             ?.isIgnoringBatteryOptimizations(packageName) == true
 
+    // -- 在线更新 ------------------------------------------------------------
+
+    /**
+     * 检查 GitHub Releases 是否有新版本。
+     *
+     * 手动触发才给反馈：网络失败时明确说「检查失败」而不是沉默（用户主动点的，
+     * 静默会让人以为按钮坏了）。查到新版本则弹对话框，确认后开始下载。
+     */
+    private fun checkForUpdate() {
+        val btn = findViewById<Button>(R.id.btnCheckUpdate)
+        btn.isEnabled = false
+        btn.text = "检查中…"
+        thread(name = "update-check") {
+            // 分三种结果：查到新版本 / 已是最新 / 查不到（网络或接口问题）。
+            // 后两种都必须给话，否则用户点完没反应会以为按钮坏了。
+            var failed = false
+            val result = runCatching { UpdateChecker.check(this) }
+                .onFailure { Log.w("JEVPRIORITY", "update check: ${it.message}") }
+                .getOrElse { failed = true; null }
+            val current = UpdateChecker.currentVersionName(this)
+            runOnUiThread {
+                btn.isEnabled = true
+                btn.text = "检查更新"
+                when {
+                    failed -> Toast.makeText(
+                        this, "检查失败，请确认网络可用（GitHub 在国内可能不稳定）", Toast.LENGTH_LONG
+                    ).show()
+
+                    result != null -> confirmUpdate(result)
+                    // check() 返回 null 只代表「没有更新版本」
+                    else -> AlertDialog.Builder(this)
+                        .setTitle("已是最新版本")
+                        .setMessage("当前 v$current")
+                        .setPositiveButton("好", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    private fun confirmUpdate(info: UpdateChecker.Result) {
+        val message = buildString {
+            append("当前 v").append(info.currentTag.removePrefix("v"))
+            append("，最新 ").append(info.latestTag).append("\n\n")
+            if (info.notes.isNotBlank()) append(info.notes)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("发现新版本")
+            .setMessage(message)
+            .setPositiveButton("立即更新") { _, _ -> startDownload(info) }
+            .setNegativeButton("以后再说", null)
+            .show()
+    }
+
+    /**
+     * 下载并安装。下载在子线程，进度用系统通知栏展示 —— 用户常在这时候切出去，
+     * 用 Toast 或对话框都会被系统销毁。
+     */
+    private fun startDownload(info: UpdateChecker.Result) {
+        val dest = java.io.File(UpdateChecker.updateDir(this), "xianhui.apk")
+        if (dest.exists()) dest.delete()
+
+        val nm = getSystemService(NotificationManager::class.java)
+        val channelId = "jev_update"
+        if (nm.getNotificationChannel(channelId) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(channelId, "版本更新", NotificationManager.IMPORTANCE_LOW)
+            )
+        }
+        val notifyId = 2001
+
+        fun showProgress(pct: Int) {
+            val bar = if (pct < 0) NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle("正在下载更新")
+                .setProgress(0, 0, true)
+            else NotificationCompat.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.stat_sys_download)
+                .setContentTitle("正在下载更新")
+                .setProgress(100, pct, false)
+            runCatching {
+                nm.notify(notifyId, bar.setOngoing(true).setOnlyAlertOnce(true).build())
+            }
+        }
+
+        Toast.makeText(this, "已开始下载，可在通知栏查看进度", Toast.LENGTH_SHORT).show()
+
+        thread(name = "update-download") {
+            val ok = runCatching {
+                UpdateChecker.download(info.downloadUrl, dest) { pct -> showProgress(pct) }
+                dest.length() > 0
+            }.onFailure {
+                Log.w("JEVPRIORITY", "update download failed: ${it.message}")
+            }.getOrDefault(false)
+
+            runOnUiThread {
+                runCatching { nm.cancel(notifyId) }
+                if (!ok) {
+                    Toast.makeText(this, "下载失败，请稍后重试", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                UpdateChecker.install(this, dest)
+                // 从「未知来源安装」设置页回来时，重装一次自动弹出安装界面。
+                pendingApk = dest
+            }
+        }
+    }
+
+    /** 下载完但用户还没装上的包，等从权限页返回后自动续上。 */
+    private var pendingApk: java.io.File? = null
+
+    private fun resumePendingInstall() {
+        val apk = pendingApk ?: return
+        if (!apk.exists()) {
+            pendingApk = null
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) return
+        pendingApk = null
+        UpdateChecker.install(this, apk)
+    }
+
     private fun chip(view: TextView, ok: Boolean, okText: String, todoText: String) {
         view.text = if (ok) okText else todoText
         view.setTextColor(Color.parseColor(if (ok) "#3B6D11" else "#A32D2D"))
@@ -761,9 +903,9 @@ class MainActivity : AppCompatActivity() {
      */
     private fun refreshBackgroundHint(tv: TextView) {
         tv.text = if (prefs.backgroundOnly) {
-            "已开启：只监听后台消息。停在微信里收到的消息不再进列表。"
+            "只监听后台消息；停在微信里收到的消息不进列表。"
         } else {
-            "已关闭（默认）：不管停在微信里还是切到后台，都照常监听。"
+            "停在微信里或切到后台，都照常监听。"
         }
     }
 

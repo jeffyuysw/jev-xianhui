@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    在线更新下载的 APK 存在 cache/update/ 下。
+    Android 7 起不允许把 file:// 的路径交给别的应用（安装器），必须走
+    FileProvider 换成 content:// 临时授权，否则安装界面会打不开。
+-->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>
