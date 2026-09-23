@@ -1,0 +1,62 @@
+# 本仓库同时含 Android 与 Windows 两个子工程，各自还有一份 .gitignore。
+# 这里再兜一层，确保「密钥 / 日志 / 本机路径 / 构建产物」在任何情况下都不会被提交。
+
+# ---------- 密钥与私有配置（最重要） ----------
+config.json
+*.local.json
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+local.properties
+keystore.properties
+secrets.properties
+
+# ---------- 日志 ----------
+*.log
+logs/
+
+# ---------- Android 构建产物 ----------
+.gradle/
+.kotlin/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+release/
+app/release/
+
+# ---------- Windows / Python 构建产物 ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dist/
+*.manifest
+packaging/output/
+assets/_preview_cutout.png
+
+# ---------- Windows 版暂不上架（待修复中） ----------
+# 本地保留以便继续开发；修复完成后删掉下面这行并 git add jev-xianhui-windows 即可重新发布。
+jev-xianhui-windows/
+
+# ---------- IDE ----------
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini

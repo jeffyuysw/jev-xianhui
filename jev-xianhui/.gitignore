@@ -1,0 +1,43 @@
+# ---- Gradle ----
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---- Local machine config (contains a personal SDK path) ----
+local.properties
+
+# ---- Release signing (the app's identity — never commit, always back up) ----
+keystore/
+keystore.properties
+
+# ---- IDE ----
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+out/
+
+# ---- Kotlin ----
+.kotlin/
+
+# ---- Android build outputs ----
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+captures/
+release/
+app/release/
+
+# ---- Native / crash dumps ----
+.externalNativeBuild/
+.cxx/
+*.hprof
+*.log
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+desktop.ini

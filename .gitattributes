@@ -1,0 +1,41 @@
+# 统一换行符，避免跨平台协作时把脚本弄坏。
+# 关键：gradlew 是 shell 脚本，必须保持 LF，否则 macOS / Linux 上无法执行。
+
+* text=auto eol=lf
+
+# Windows 批处理必须是 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Unix 脚本明确 LF
+gradlew text eol=lf
+*.sh text eol=lf
+
+# 二进制文件不做换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.exe binary
+*.dll binary
+*.pyd binary
+*.so binary
+*.onnx binary
+*.zip binary
+
+# 语言识别 / 差异统计
+*.kt text
+*.kts text
+*.py text
+*.md text
+*.xml text
+*.json text
+*.yml text
+*.yaml text
+*.iss text
+*.spec text
+*.properties text
