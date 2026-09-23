@@ -1,13 +1,21 @@
 package com.jev.priority
 
+import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.app.AppOpsManager
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
@@ -28,6 +36,7 @@ import com.jev.priority.jev.PriorityClient
 import com.jev.priority.notify.KeepAliveService
 import com.jev.priority.notify.MsgNotificationListener
 import com.jev.priority.notify.NotificationListenerHolder
+import com.jev.priority.overlay.OverlayHolder
 import com.jev.priority.overlay.OverlayPalette
 import com.jev.priority.overlay.PriorityOverlay
 import kotlin.concurrent.thread
@@ -56,6 +65,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvKeyStatus: TextView
     private lateinit var tvTestResult: TextView
     private lateinit var etKey: EditText
+    private lateinit var tvBatteryStatus: TextView
+    private lateinit var btnAutostart: Button
     private lateinit var btnNotifyPerm: Button
     private lateinit var btnOverlayPerm: Button
     private lateinit var btnToggle: Button
@@ -73,12 +84,50 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+    /**
+     * 权限状态实时刷新。
+     *
+     * 只在 onResume 里查一次是不够的：从系统设置授权页返回的瞬间，ROM（小米 / HyperOS
+     * 尤其明显）对 AppOps 的写入是异步的，立刻查询拿到的还是旧值 —— 表现为「明明开了
+     * 悬浮窗，卡片却显示未开启，退出重开才好」。所以：
+     *  - 悬浮窗：注册 AppOps 回调，权限一变系统就通知我们；
+     *  - 通知使用权：监听 enabled_notification_listeners 这个 Secure 设置的变化；
+     *  - 再配合 onResume 里 300ms / 1200ms / 3000ms 三次兜底刷新，覆盖回调缺失的 ROM。
+     *
+     * AppOps 的回调在 binder 线程，统一 post 到主线程处理。
+     */
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private val overlayOpsListener = object : AppOpsManager.OnOpChangedListener {
+        override fun onOpChanged(op: String, packageName: String) = onPermissionMaybeChanged()
+    }
+
+    private val notifyObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) = onPermissionMaybeChanged()
+    }
+
+    private fun onPermissionMaybeChanged() {
+        if (isDestroyed || isFinishing) return
+        val overlayOn = Settings.canDrawOverlays(this)
+        // 权限被收回时把悬浮窗收掉，避免残留一块点不动也关不掉的窗体。
+        if (!overlayOn && overlay.isShowing()) overlay.hide()
+        if (notificationAccessGranted()) {
+            MsgNotificationListener.rebind(this)
+            runCatching {
+                ContextCompat.startForegroundService(this, Intent(this, KeepAliveService::class.java))
+            }
+        }
+        mainHandler.post { syncStates() }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         prefs = Prefs(this)
-        overlay = PriorityOverlay(this)
+        // 单例 + applicationContext：悬浮窗的寿命比 Activity 长（系统级窗体，
+        // 用户不关就一直在），持有 Activity 会让整个页面无法回收。
+        overlay = OverlayHolder.get(this)
 
         tvStatusSummary = findViewById(R.id.tvStatusSummary)
         statusDot = findViewById(R.id.statusDot)
@@ -88,6 +137,8 @@ class MainActivity : AppCompatActivity() {
         tvKeyStatus = findViewById(R.id.tvKeyStatus)
         tvTestResult = findViewById(R.id.tvTestResult)
         etKey = findViewById(R.id.etApiKey)
+        tvBatteryStatus = findViewById(R.id.tvBatteryStatus)
+        btnAutostart = findViewById(R.id.btnAutostart)
         btnNotifyPerm = findViewById(R.id.btnNotifyPerm)
         btnOverlayPerm = findViewById(R.id.btnOverlayPerm)
         btnToggle = findViewById(R.id.btnToggleOverlay)
@@ -193,8 +244,11 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        findViewById<Button>(R.id.btnClear).setOnClickListener {
-            val n = MsgStore.size()
+        // 第四步：自启动 + 省电无限制。两项设置在不同页面，用一个按钮弹出入口，
+        // 避免用户自己在层层的系统设置里翻。
+        btnAutostart.setOnClickListener { showKeepAliveOptions() }
+
+        findViewById<Button>(R.id.btnClear).setOnClickListener {            val n = MsgStore.size()
             if (n == 0) {
                 Toast.makeText(this, "列表已经是空的", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
@@ -210,6 +264,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupAppearance()
+
+        // 全生命周期注册：用户可能停留在设置页里改权限，此时 App 在后台，
+        // 回调到达时直接刷新 UI，返回时状态就已经是对的。
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        appOps.startWatchingMode(AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, packageName, overlayOpsListener)
+        contentResolver.registerContentObserver(
+            Settings.Secure.getUriFor("enabled_notification_listeners"),
+            false,
+            notifyObserver
+        )
+    }
+
+    override fun onDestroy() {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        appOps.stopWatchingMode(overlayOpsListener)
+        contentResolver.unregisterContentObserver(notifyObserver)
+        mainHandler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     // -- overlay appearance -------------------------------------------------
@@ -488,10 +560,13 @@ class MainActivity : AppCompatActivity() {
             overlay.show()
         }
         syncStates()
-        // The rebind above is asynchronous. Refresh once more so the "监听服务"
-        // line shows the real outcome instead of the split second right after
-        // the request was made.
-        window.decorView.postDelayed({ syncStates() }, 1000)
+        // 兜底刷新：部分 ROM 的权限写入是异步的，且回调可能缺失。
+        // 在三个时间点各刷一次，把「明明开了却显示未开启」的窗口压到最短。
+        // 挂在 mainHandler 上而不是 decorView 上，这样 onDestroy 的
+        // removeCallbacksAndMessages 能一并取消，页面关掉后不会再回调。
+        listOf(300L, 1200L, 3000L).forEach { delay ->
+            mainHandler.postDelayed({ if (!isFinishing && !isDestroyed) syncStates() }, delay)
+        }
     }
 
     override fun onPause() {
@@ -506,23 +581,31 @@ class MainActivity : AppCompatActivity() {
         val notifyOn = notificationAccessGranted()
         val overlayOn = Settings.canDrawOverlays(this)
         val keyOn = prefs.apiKey.isNotBlank()
+        val batteryOn = batteryUnrestricted()
 
         chip(tvNotifyStatus, notifyOn, "已开启", "未开启")
         chip(tvOverlayStatus, overlayOn, "已开启", "未开启")
         chip(tvKeyStatus, keyOn, "已填写", "未填写")
+        // 自启动查不到，只能反映省电策略，文案避免让人以为「已设置」= 自启动也开了。
+        chip(tvBatteryStatus, batteryOn, "省电已无限制", "未设置")
 
         // Once a step is done its button has no job left, so take it away.
         btnNotifyPerm.visibility = if (notifyOn) View.GONE else View.VISIBLE
         btnOverlayPerm.visibility = if (overlayOn) View.GONE else View.VISIBLE
+        // 这一项包含自启动，无法确认真实状态，所以按钮一直保留供用户复查。
+        btnAutostart.text = if (batteryOn) "检查自启动" else "去开启"
 
         btnToggle.text = if (overlay.isShowing()) "隐藏悬浮窗" else "显示悬浮窗"
         btnToggle.isEnabled = notifyOn && overlayOn
 
+        // 前三项是硬门槛；省电策略属于「稳定性」而非「能不能用」，
+        // 所以不把它算进「还差几步」，只单独提示，避免用户以为用不了。
         val done = listOf(notifyOn, overlayOn, keyOn).count { it }
         statusDot.background = dot(if (done == 3) "#639922" else "#E24B4A")
-        tvStatusSummary.text = when (done) {
-            3 -> "全部就绪，正在为你判断消息"
-            else -> "还差 ${3 - done} 步就能用了"
+        tvStatusSummary.text = when {
+            done < 3 -> "还差 ${3 - done} 步就能用了"
+            !batteryOn -> "基本就绪 —— 建议再设一下自启动 + 省电无限制，否则后台可能被冻结"
+            else -> "全部就绪，正在为你判断消息"
         }
 
         // Live queue readout, so the user can see the app is actually working
@@ -544,10 +627,114 @@ class MainActivity : AppCompatActivity() {
         tvListenerStatus.text = if (bound) {
             "监听服务：已连接"
         } else {
-            "监听服务：未连接 —— 去系统设置重新打开「通知使用权」，或重启手机"
+            "监听服务：未连接 —— 通常几秒内自动恢复；持续未恢复请重新打开「通知使用权」，或重启手机"
         }
         tvListenerStatus.setTextColor(Color.parseColor(if (bound) "#3B6D11" else "#A32D2D"))
     }
+
+    /**
+     * 「自启动 + 省电无限制」的两个入口。
+     *
+     * 各家 ROM 的设置页入口都不一样，而且**没有公开 API 能读取或改写**
+     * （小米的自启动属于私有权限）。所以这里只做「把你送到正确的那一页」，
+     * 具体开关由用户自己确认——任何声称能自动开启的方案都是骗人的。
+     *
+     * 依次尝试：厂商自启动管理页 → 应用详情页（兜底，多数机器上能一站配完），
+     * 电池优化白名单则用 Android 官方的 REQUEST_IGNORE_BATTERY_OPTIMIZATIONS。
+     */
+    private fun showKeepAliveOptions() {
+        val names = arrayOf("打开「自启动」设置", "关闭电池优化（省电无限制）", "打开本应用详情页")
+        AlertDialog.Builder(this)
+            .setTitle("自启动 + 省电无限制")
+            .setItems(names) { _, which ->
+                when (which) {
+                    0 -> openVendorAutostart()
+                    1 -> openBatteryOptimization()
+                    2 -> openAppDetails()
+                }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /** 优先跳到厂商的自启动管理页；跳不过去就退到应用详情页。 */
+    private fun openVendorAutostart() {
+        // 常见国产 ROM 的自启动管理页。逐个 try，第一个能打开的就用。
+        val candidates = listOf(
+            // 小米 / HyperOS
+            ComponentName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.autostart.AutoStartManagementActivity"
+            ),
+            // 华为 / 荣耀
+            ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+            ),
+            // OPPO / 一加
+            ComponentName(
+                "com.coloros.safecenter",
+                "com.coloros.safecenter.permission.startup.StartupAppListActivity"
+            ),
+            // vivo
+            ComponentName(
+                "com.vivo.permissionmanager",
+                "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"
+            ),
+        )
+        for (c in candidates) {
+            val ok = runCatching {
+                startActivity(Intent().setComponent(c))
+                true
+            }.getOrDefault(false)
+            if (ok) return
+        }
+        // 都不行（AOSP、三星等本来就没有自启动管理）→ 应用详情页
+        openAppDetails()
+        Toast.makeText(this, "这台机器没有单独的自启动页，请在本页确认省电策略", Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * 电池优化白名单。这是唯一有官方 API 的一项，用系统对话框请求豁免，
+     * 用户点一下「允许」即可，不用自己去翻设置。
+     */
+    @SuppressLint("BatteryLife")
+    private fun openBatteryOptimization() {
+        val pm = getSystemService(PowerManager::class.java)
+        if (pm?.isIgnoringBatteryOptimizations(packageName) == true) {
+            Toast.makeText(this, "已经是「无限制」，无需再设", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:$packageName"))
+        val ok = runCatching { startActivity(intent) }.isSuccess
+        if (!ok) {
+            // 少数 ROM 移除了这个 action，退到电池优化列表。
+            runCatching {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }.onFailure {
+                openAppDetails()
+            }
+        }
+    }
+
+    private fun openAppDetails() {
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:$packageName"))
+        runCatching { startActivity(intent) }
+            .onFailure { Toast.makeText(this, "打不开系统设置，请手动前往", Toast.LENGTH_LONG).show() }
+    }
+
+    /**
+     * 电池优化是否已豁免。
+     *
+     * 这是这一步唯一能查到的真实状态：自启动是厂商私有设置，没有任何公开
+     * API 可读（这也是我们不能替用户打开它的原因）。所以徽章反映的是
+     * 「省电无限制」，自启动只能靠用户自己确认——文案里写清楚了。
+     */
+    private fun batteryUnrestricted(): Boolean =
+        getSystemService(PowerManager::class.java)
+            ?.isIgnoringBatteryOptimizations(packageName) == true
 
     private fun chip(view: TextView, ok: Boolean, okText: String, todoText: String) {
         view.text = if (ok) okText else todoText

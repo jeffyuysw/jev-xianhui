@@ -37,7 +37,9 @@ class PriorityClient(private val prefs: Prefs) {
         item.judged = true
         item.error = null
 
-        Log.i(TAG, "judged ${item.title}: urgency=${item.urgency} now=${item.needsNow} " +
+        // 只记结果的形状，不记消息内容或对方昵称 —— App 对外的承诺是
+        // 「不落盘、不进日志」，logcat 也算日志。
+        Log.i(TAG, "judged: urgency=${item.urgency} now=${item.needsNow} " +
             "category=${item.category} why=${item.reason} conf=${item.confidence}")
     }
 

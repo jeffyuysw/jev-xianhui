@@ -218,10 +218,20 @@ class MsgNotificationListener : NotificationListenerService() {
         return (title.ifBlank { text.take(12) }) to text
     }
 
-    private fun appLabel(pkg: String): String = try {
-        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
-    } catch (e: Exception) {
-        pkg
+    /**
+     * App labels are immutable for the lifetime of an installed package, so the
+     * PackageManager round-trip is worth caching: getApplicationInfo() is a
+     * cross-process call, and onNotificationPosted runs on the main thread for
+     * every single notification.
+     */
+    private val labelCache = HashMap<String, String>()
+
+    private fun appLabel(pkg: String): String = labelCache.getOrPut(pkg) {
+        try {
+            packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+        } catch (e: Exception) {
+            pkg
+        }
     }
 
     private fun judgeAsync(item: MsgItem) {

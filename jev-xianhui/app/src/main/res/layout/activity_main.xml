@@ -259,6 +259,63 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- 第四步：自启动 + 省电无限制（国产 ROM 保活） -->
+        <LinearLayout
+            android:id="@+id/cardAutostart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/stepAutostart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="4 · 自启动 + 省电无限制"
+                    android:textColor="#2C2C2A"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvBatteryStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_chip_todo"
+                    android:paddingStart="9dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="9dp"
+                    android:paddingBottom="3dp"
+                    android:text="未设置"
+                    android:textColor="#A32D2D"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:lineSpacingExtra="2dp"
+                android:text="小米 / HyperOS 必做，否则服务被冻结、读不到消息。"
+                android:textColor="#888780"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnAutostart"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="去开启" />
+        </LinearLayout>
+
         <!-- 运行 -->
         <LinearLayout
             android:layout_width="match_parent"
