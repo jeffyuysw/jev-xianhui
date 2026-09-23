@@ -1,6 +1,7 @@
 package com.jev.priority.overlay
 
 import android.content.Context
+import com.jev.priority.core.MsgHistoryDb
 import com.jev.priority.core.MsgItem
 import com.jev.priority.core.MsgStore
 import com.jev.priority.core.Prefs
@@ -30,6 +31,8 @@ internal object PriorityRetry {
                 item.error = e.message ?: "判断失败"
             } finally {
                 item.judging = false
+                // 重试的结果同样要落到本机记录里，否则记录页会一直显示「判断中」。
+                MsgHistoryDb.get(ctx).fillResult(item.historyId, item)
                 MsgStore.notifyChange()
             }
         }

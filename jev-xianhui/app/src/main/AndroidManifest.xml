@@ -29,6 +29,18 @@
             </intent-filter>
         </activity>
 
+        <!-- 设置页：API Key、运行开关、悬浮窗外观 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="设置" />
+
+        <!-- 分析记录：本机保存的判断历史 -->
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false"
+            android:label="分析记录" />
+
         <!-- The only message source. Bound by the system, never started by us. -->
         <service
             android:name=".notify.MsgNotificationListener"

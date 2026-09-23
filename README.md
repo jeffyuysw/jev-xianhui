@@ -38,11 +38,11 @@
 <p align="center">
   <img src="docs/img/overlay.jpg" height="420" alt="悬浮窗：按紧急度排序的待处理消息" />
   &nbsp;&nbsp;
-  <img src="docs/img/settings.jpg" height="420" alt="主界面：三张状态卡" />
+  <img src="docs/img/home.jpg" height="420" alt="主页：四步权限引导与运行状态" />
   &nbsp;&nbsp;
-  <img src="docs/img/appearance.jpg" height="420" alt="外观设置：文字色、字号、宽度、不透明度" />
+  <img src="docs/img/settings.jpg" height="420" alt="设置页：API Key、运行开关、悬浮窗外观" />
 </p>
-<p align="center"><sub>左：悬浮窗——红/黄/灰三档，按紧急度排序，直接叠在聊天窗上。中：主界面——三张状态卡，每张独立显示自己的完成状态。右：外观设置——文字色、字号、宽度、不透明度均可调。</sub></p>
+<p align="center"><sub>左：悬浮窗——红/黄/灰三档，按紧急度排序，直接叠在聊天窗上。中：主页——四步权限引导，一屏看完，右上角进设置与分析记录。右：设置页——API Key、运行开关（微信 / QQ / 自动判断 / 仅后台）与悬浮窗外观。</sub></p>
 
 ---
 
@@ -179,9 +179,9 @@ MIUI / HyperOS 等会冻结后台进程，需要额外配置：
 ## 隐私
 
 - **API Key 只存本机**（App 私有存储），随判断请求发出。
-- **消息原文只在判断那一刻发给模型接口**，不落盘、不进日志、不存历史。唯一的网络出口是 `jev/HttpJson.kt` 里那一个 POST。
+- **消息原文只在判断那一刻发给模型接口**，不进日志。唯一的网络出口是 `jev/HttpJson.kt` 里那一个 POST。
+- **判断记录只存在你的手机里**：本机 SQLite 数据库（`core/MsgHistoryDb.kt`），最多保留 2000 条，超出自动裁掉最旧的；随时可在「分析记录」页一键清空。它不联网、不上传，App 也关掉了系统备份（`allowBackup=false`）。
 - **无统计、无埋点、无上报**。
-- 重启后列表清空（有意为之，避免留下聊天痕迹）。
 
 ---
 

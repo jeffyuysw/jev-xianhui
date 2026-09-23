@@ -1,10 +1,7 @@
 package com.jev.priority
 
-import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.AppOpsManager
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -19,43 +16,31 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.util.Log
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.View
 import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.jev.priority.core.MsgStore
 import com.jev.priority.core.Prefs
-import com.jev.priority.jev.PriorityClient
 import com.jev.priority.notify.KeepAliveService
 import com.jev.priority.notify.MsgNotificationListener
 import com.jev.priority.notify.NotificationListenerHolder
 import com.jev.priority.overlay.OverlayHolder
-import com.jev.priority.overlay.OverlayPalette
 import com.jev.priority.overlay.PriorityOverlay
-import com.jev.priority.update.UpdateChecker
-import kotlin.concurrent.thread
 
 /**
- * One screen, three setup steps.
+ * 主页：四步权限引导 + 运行状态 + 两个常用操作。
  *
- * Each step is a card that reflects its own state: the chip flips from red
- * "not yet" to green "done", and the button disappears once there is nothing
- * left to do. That stops people tapping a button that no longer has any effect.
+ * 只负责「能不能用起来」这件事：通知使用权、悬浮窗、API Key、自启动。
+ * API Key 的输入、运行开关、悬浮窗外观都在 [SettingsActivity]，所以这一屏
+ * 一页就能看完，不必来回滑动。
  *
- * Both permissions are special app-access permissions Android only grants from
- * the system settings screen, so this activity can detect the state and send
- * the user there, but cannot grant them itself — by design, not a shortcut.
+ * 每一步都是一张卡：徽章从红「未开启」变绿「已开启」，做完按钮自动消失，
+ * 避免用户去点一个已经没有作用的按钮。两项特殊权限只能由用户在系统设置里
+ * 授权，App 能检测状态、能把他送过去，但没法代开——这是系统设计。
  */
 class MainActivity : AppCompatActivity() {
 
@@ -65,22 +50,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvStatusSummary: TextView
     private lateinit var statusDot: View
     private lateinit var tvListenerStatus: TextView
-    private lateinit var tvNotifyStats: TextView
     private lateinit var tvNotifyStatus: TextView
     private lateinit var tvOverlayStatus: TextView
     private lateinit var tvKeyStatus: TextView
-    private lateinit var tvTestResult: TextView
-    private lateinit var etKey: EditText
-    private lateinit var tvBatteryStatus: TextView
-    private lateinit var btnAutostart: Button
     private lateinit var btnNotifyPerm: Button
     private lateinit var btnOverlayPerm: Button
     private lateinit var btnToggle: Button
 
     /**
-     * Android 13+ needs POST_NOTIFICATIONS at runtime, otherwise the keep-alive
-     * foreground notification is suppressed and the ROM has even more reason to
-     * freeze us. Asked once per process so a denial cannot become a resume loop.
+     * Android 13+ 需要 POST_NOTIFICATIONS，否则保活的前台通知被隐藏，
+     * ROM 就更有理由回收我们。每进程只问一次，避免被拒后陷入循环。
      */
     private var askedPostNotifications = false
     private val askPostNotifications =
@@ -93,9 +72,9 @@ class MainActivity : AppCompatActivity() {
     /**
      * 权限状态实时刷新。
      *
-     * 只在 onResume 里查一次是不够的：从系统设置授权页返回的瞬间，ROM（小米 / HyperOS
-     * 尤其明显）对 AppOps 的写入是异步的，立刻查询拿到的还是旧值 —— 表现为「明明开了
-     * 悬浮窗，卡片却显示未开启，退出重开才好」。所以：
+     * 只在 onResume 里查一次是不够的：从系统设置授权页返回的瞬间，ROM（小米 /
+     * HyperOS 尤其明显）对 AppOps 的写入是异步的，立刻查询拿到的还是旧值 ——
+     * 表现为「明明开了悬浮窗，卡片却显示未开启，退出重开才好」。所以：
      *  - 悬浮窗：注册 AppOps 回调，权限一变系统就通知我们；
      *  - 通知使用权：监听 enabled_notification_listeners 这个 Secure 设置的变化；
      *  - 再配合 onResume 里 300ms / 1200ms / 3000ms 三次兜底刷新，覆盖回调缺失的 ROM。
@@ -138,24 +117,24 @@ class MainActivity : AppCompatActivity() {
         tvStatusSummary = findViewById(R.id.tvStatusSummary)
         statusDot = findViewById(R.id.statusDot)
         tvListenerStatus = findViewById(R.id.tvListenerStatus)
-        tvNotifyStats = findViewById(R.id.tvNotifyStats)
         tvNotifyStatus = findViewById(R.id.tvNotifyStatus)
         tvOverlayStatus = findViewById(R.id.tvOverlayStatus)
         tvKeyStatus = findViewById(R.id.tvKeyStatus)
-        tvTestResult = findViewById(R.id.tvTestResult)
-        etKey = findViewById(R.id.etApiKey)
-        tvBatteryStatus = findViewById(R.id.tvBatteryStatus)
-        btnAutostart = findViewById(R.id.btnAutostart)
         btnNotifyPerm = findViewById(R.id.btnNotifyPerm)
         btnOverlayPerm = findViewById(R.id.btnOverlayPerm)
         btnToggle = findViewById(R.id.btnToggleOverlay)
-
-        etKey.setText(prefs.apiKey)
 
         runCatching {
             findViewById<TextView>(R.id.tvVersion).text =
                 "v${packageManager.getPackageInfo(packageName, 0).versionName}"
         }
+
+        findViewById<Button>(R.id.btnSettings).setOnClickListener { openSettings() }
+        findViewById<Button>(R.id.btnHistory).setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
+        // 第三步的输入框在设置页，这里只把用户送过去。
+        findViewById<Button>(R.id.btnKeyPerm).setOnClickListener { openSettings() }
 
         btnNotifyPerm.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -171,64 +150,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btnSave).setOnClickListener {
-            val typed = etKey.text.toString().trim()
-            prefs.apiKey = typed
-            tvTestResult.visibility = View.GONE
-            Toast.makeText(
-                this,
-                if (typed.isBlank()) "已清空 Key" else "已保存",
-                Toast.LENGTH_SHORT
-            ).show()
-            syncStates()
-        }
-
-        findViewById<Button>(R.id.btnTest).setOnClickListener {
-            prefs.apiKey = etKey.text.toString().trim()
-            if (prefs.apiKey.isBlank()) {
-                showTest("先填 API Key 再测试", ok = false)
-                return@setOnClickListener
-            }
-            showTest("正在连接模型服务…", ok = true)
-            thread {
-                val (msg, ok) = try {
-                    PriorityClient(prefs).probe() to true
-                } catch (e: Exception) {
-                    "连接失败：${e.message ?: "未知错误"}" to false
-                }
-                runOnUiThread {
-                    showTest(msg, ok)
-                    syncStates()
-                }
-            }
-        }
-
-        val cbWechat = findViewById<CheckBox>(R.id.cbWechat)
-        val cbQQ = findViewById<CheckBox>(R.id.cbQQ)
-        cbWechat.isChecked = Prefs.WECHAT in prefs.watchPkgs
-        cbQQ.isChecked = Prefs.QQ in prefs.watchPkgs
-        val syncWatch = {
-            val set = mutableSetOf<String>()
-            if (cbWechat.isChecked) set.add(Prefs.WECHAT)
-            if (cbQQ.isChecked) set.add(Prefs.QQ)
-            prefs.watchPkgs = set
-        }
-        cbWechat.setOnCheckedChangeListener { _, _ -> syncWatch() }
-        cbQQ.setOnCheckedChangeListener { _, _ -> syncWatch() }
-
-        val cbAuto = findViewById<CheckBox>(R.id.cbAutoJudge)
-        cbAuto.isChecked = prefs.autoJudge
-        cbAuto.setOnCheckedChangeListener { _, v -> prefs.autoJudge = v }
-
-        // 是否后台监听。默认关闭 —— 关掉时，停在微信里收到的消息也会进列表。
-        val cbBackgroundOnly = findViewById<CheckBox>(R.id.cbBackgroundOnly)
-        val tvBackgroundHint = findViewById<TextView>(R.id.tvBackgroundHint)
-        cbBackgroundOnly.isChecked = prefs.backgroundOnly
-        refreshBackgroundHint(tvBackgroundHint)
-        cbBackgroundOnly.setOnCheckedChangeListener { _, v ->
-            prefs.backgroundOnly = v
-            refreshBackgroundHint(tvBackgroundHint)
-        }
+        // 第四步：自启动 + 省电无限制。两项设置在不同页面，用一个按钮弹出入口，
+        // 避免用户自己在层层的系统设置里翻。
+        findViewById<Button>(R.id.btnAutostart).setOnClickListener { showKeepAliveOptions() }
 
         btnToggle.setOnClickListener {
             if (overlay.isShowing()) {
@@ -243,7 +167,7 @@ class MainActivity : AppCompatActivity() {
             syncStates()
         }
 
-        // Escape hatch for a list that piled up while the overlay was hidden.
+        // 长按清空：列表在悬浮窗隐藏时也会堆积，留一个不用打开悬浮窗的出口。
         btnToggle.setOnLongClickListener {
             if (MsgStore.size() == 0) return@setOnLongClickListener false
             MsgStore.clear()
@@ -251,29 +175,19 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // 第四步：自启动 + 省电无限制。两项设置在不同页面，用一个按钮弹出入口，
-        // 避免用户自己在层层的系统设置里翻。
-        btnAutostart.setOnClickListener { showKeepAliveOptions() }
-
-        findViewById<Button>(R.id.btnCheckUpdate).setOnClickListener { checkForUpdate() }
-
         findViewById<Button>(R.id.btnClear).setOnClickListener {
             val n = MsgStore.size()
             if (n == 0) {
                 Toast.makeText(this, "列表已经是空的", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            // Also clear the shade, otherwise the list refills on next refresh.
+            // 同时清掉通知栏，否则下次刷新列表又会被填回来。
             val listener = NotificationListenerHolder.instance
-            MsgStore.all().forEach { item ->
-                listener?.dismissByKey(item.sbnKey, item.key)
-            }
+            MsgStore.all().forEach { item -> listener?.dismissByKey(item.sbnKey, item.key) }
             MsgStore.clear()
             Toast.makeText(this, "已清空 $n 条", Toast.LENGTH_SHORT).show()
             syncStates()
         }
-
-        setupAppearance()
 
         // 全生命周期注册：用户可能停留在设置页里改权限，此时 App 在后台，
         // 回调到达时直接刷新 UI，返回时状态就已经是对的。
@@ -294,263 +208,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    // -- overlay appearance -------------------------------------------------
-
-    private lateinit var rowBgPresets: LinearLayout
-    private lateinit var rowFgPresets: LinearLayout
-    private lateinit var tvBgValue: TextView
-    private lateinit var tvFgValue: TextView
-    private lateinit var tvFontLabel: TextView
-    private lateinit var tvWidthLabel: TextView
-    private lateinit var tvOpacityLabel: TextView
-    private lateinit var tvAppearanceWarn: TextView
-    private lateinit var sbFont: SeekBar
-    private lateinit var sbWidth: SeekBar
-    private lateinit var sbOpacity: SeekBar
-
-    /** Preset swatches offered next to the RGB picker. */
-    private val bgPresets = listOf(
-        "白" to "#FFFFFF", "米" to "#F5F4F1", "浅灰" to "#E9E8E4",
-        "浅蓝" to "#EAF1FC", "深灰" to "#2C2C2A", "黑" to "#141413",
-    )
-    private val fgPresets = listOf(
-        "黑" to "#2C2C2A", "白" to "#FFFFFF", "深灰" to "#4A4945",
-        "蓝" to "#1F4FA8", "红" to "#B3372F", "绿" to "#1E7A4B",
-    )
-
-    private fun setupAppearance() {
-        rowBgPresets = findViewById(R.id.rowBgPresets)
-        rowFgPresets = findViewById(R.id.rowFgPresets)
-        tvBgValue = findViewById(R.id.tvBgValue)
-        tvFgValue = findViewById(R.id.tvFgValue)
-        tvFontLabel = findViewById(R.id.tvFontLabel)
-        tvWidthLabel = findViewById(R.id.tvWidthLabel)
-        tvOpacityLabel = findViewById(R.id.tvOpacityLabel)
-        tvAppearanceWarn = findViewById(R.id.tvAppearanceWarn)
-        sbFont = findViewById(R.id.sbFont)
-        sbWidth = findViewById(R.id.sbWidth)
-        sbOpacity = findViewById(R.id.sbOpacity)
-
-        sbFont.max = Prefs.MAX_FONT - Prefs.MIN_FONT
-        sbWidth.max = Prefs.MAX_WIDTH_DP - Prefs.MIN_WIDTH_DP
-        // 1..100 maps to progress 0..99 so every step is a real percentage.
-        sbOpacity.max = Prefs.MAX_OPACITY - Prefs.MIN_OPACITY
-
-        buildSwatches(rowBgPresets, bgPresets) { applyBg(it) }
-        buildSwatches(rowFgPresets, fgPresets) { applyFg(it) }
-
-        findViewById<Button>(R.id.btnBgPick).setOnClickListener {
-            pickRgb("选择背景色", prefs.overlayBg) { applyBg(it) }
-        }
-        findViewById<Button>(R.id.btnFgPick).setOnClickListener {
-            pickRgb("选择文字色", prefs.overlayFg) { applyFg(it) }
-        }
-
-        sbFont.progress = prefs.overlayFontSize - Prefs.MIN_FONT
-        sbWidth.progress = prefs.overlayWidth - Prefs.MIN_WIDTH_DP
-        sbFont.setOnSeekBarChangeListener(simpleSeek { v ->
-            tvFontLabel.text = "字号 ${v}sp"
-            prefs.overlayFontSize = v
-            onAppearanceChanged()
-        })
-        sbWidth.setOnSeekBarChangeListener(simpleSeek { v ->
-            tvWidthLabel.text = "宽度 ${v}dp"
-            prefs.overlayWidth = v
-            onAppearanceChanged()
-        })
-
-        // Opacity updates the live window alpha only — no rebuild, so dragging
-        // stays smooth instead of flickering the whole tree each frame.
-        sbOpacity.progress = prefs.overlayOpacity - Prefs.MIN_OPACITY
-        sbOpacity.setOnSeekBarChangeListener(simpleSeek { v ->
-            tvOpacityLabel.text = "不透明度 $v%"
-            prefs.overlayOpacity = v
-            overlay.applyOpacity()
-        })
-
-        findViewById<Button>(R.id.btnSwapColors).setOnClickListener {
-            val bg = prefs.overlayBg
-            prefs.overlayBg = prefs.overlayFg
-            prefs.overlayFg = bg
-            refreshAppearanceUi()
-            onAppearanceChanged()
-        }
-        findViewById<Button>(R.id.btnResetAppearance).setOnClickListener {
-            prefs.overlayBg = Prefs.DEFAULT_BG
-            prefs.overlayFg = Prefs.DEFAULT_FG
-            prefs.overlayFontSize = Prefs.DEFAULT_FONT_SIZE
-            prefs.overlayWidth = Prefs.DEFAULT_WIDTH_DP
-            sbFont.progress = Prefs.DEFAULT_FONT_SIZE - Prefs.MIN_FONT
-            sbWidth.progress = Prefs.DEFAULT_WIDTH_DP - Prefs.MIN_WIDTH_DP
-            refreshAppearanceUi()
-            onAppearanceChanged()
-        }
-
-        refreshAppearanceUi()
+    private fun openSettings() {
+        startActivity(Intent(this, SettingsActivity::class.java))
     }
-
-    private fun applyBg(hex: String) {
-        prefs.overlayBg = hex
-        refreshAppearanceUi()
-        onAppearanceChanged()
-    }
-
-    private fun applyFg(hex: String) {
-        prefs.overlayFg = hex
-        refreshAppearanceUi()
-        onAppearanceChanged()
-    }
-
-    /** The overlay rebuilds itself entirely, since most colours depend on the pair. */
-    private fun onAppearanceChanged() {
-        if (overlay.isShowing()) overlay.applyAppearance()
-        refreshAppearanceUi()
-    }
-
-    private fun refreshAppearanceUi() {
-        tvBgValue.text = prefs.overlayBg.uppercase()
-        tvFgValue.text = prefs.overlayFg.uppercase()
-        tvFontLabel.text = "字号 ${prefs.overlayFontSize}sp"
-        tvWidthLabel.text = "宽度 ${prefs.overlayWidth}dp"
-        highlightSwatches(rowBgPresets, prefs.overlayBg)
-        highlightSwatches(rowFgPresets, prefs.overlayFg)
-
-        val warn = OverlayPalette.readabilityWarning(prefs.overlayBg, prefs.overlayFg)
-        tvAppearanceWarn.visibility = if (warn == null) View.GONE else View.VISIBLE
-        tvAppearanceWarn.text = warn?.let { "⚠ $it，建议换一组。" } ?: ""
-    }
-
-    private fun buildSwatches(
-        host: LinearLayout,
-        presets: List<Pair<String, String>>,
-        onPick: (String) -> Unit,
-    ) {
-        host.removeAllViews()
-        presets.forEach { (_, hex) ->
-            val v = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(30), dp(30)).also {
-                    it.marginEnd = dp(8)
-                }
-                setOnClickListener { onPick(hex) }
-                contentDescription = hex
-            }
-            host.addView(v)
-        }
-    }
-
-    private fun highlightSwatches(host: LinearLayout, selected: String) {
-        val presets = if (host === rowBgPresets) bgPresets else fgPresets
-        for (i in 0 until host.childCount) {
-            val hex = presets.getOrNull(i)?.second ?: continue
-            val isSel = hex.equals(selected, ignoreCase = true)
-            host.getChildAt(i).background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(Color.parseColor(hex))
-                cornerRadius = dp(8).toFloat()
-                setStroke(dp(if (isSel) 2 else 1), Color.parseColor(if (isSel) "#2C2C2A" else "#E4E2DD"))
-            }
-        }
-    }
-
-    /**
-     * Every slider stores `value - MIN` as its progress, so the base value has
-     * to be looked up per bar. It used to be `if (sb === sbFont) MIN_FONT else
-     * MIN_WIDTH_DP`, which silently added 180 to the opacity slider.
-     */
-    private fun simpleSeek(onChange: (Int) -> Unit) = object : SeekBar.OnSeekBarChangeListener {
-        override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
-            if (!fromUser) return
-            val base = when (sb) {
-                sbFont -> Prefs.MIN_FONT
-                sbWidth -> Prefs.MIN_WIDTH_DP
-                sbOpacity -> Prefs.MIN_OPACITY
-                else -> 0
-            }
-            onChange(progress + base)
-        }
-
-        override fun onStartTrackingTouch(sb: SeekBar?) = Unit
-        override fun onStopTrackingTouch(sb: SeekBar?) = Unit
-    }
-
-    /**
-     * A minimal RGB dialog: three sliders plus a live preview. Deliberately not
-     * a hue wheel - three numbers are easier to reason about when matching an
-     * existing theme, and it keeps the dialog small on a phone.
-     */
-    private fun pickRgb(title: String, initial: String, onPicked: (String) -> Unit) {
-        val start = OverlayPalette.parse(initial, "#FFFFFF")
-        val sliders = IntArray(3)
-        val labels = arrayOf("R", "G", "B")
-
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(16), dp(20), dp(4))
-        }
-        val preview = View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(40)
-            )
-        }
-        box.addView(preview)
-
-        val readout = TextView(this).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(10))
-            textSize = 13f
-            setTextColor(Color.parseColor("#5F5E5A"))
-        }
-        box.addView(readout)
-
-        fun current(): Int = Color.rgb(sliders[0], sliders[1], sliders[2])
-
-        fun repaint() {
-            val c = current()
-            preview.background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(c)
-                cornerRadius = dp(9).toFloat()
-                setStroke(dp(1), Color.parseColor("#E4E2DD"))
-            }
-            readout.text = OverlayPalette.toHex(c)
-        }
-
-        val initialValues = intArrayOf(
-            OverlayPalette.red(start), OverlayPalette.green(start), OverlayPalette.blue(start)
-        )
-        for (i in 0..2) {
-            val label = TextView(this).apply {
-                text = labels[i]
-                textSize = 12f
-                setTextColor(Color.parseColor("#5F5E5A"))
-            }
-            box.addView(label)
-            val bar = SeekBar(this).apply { max = 255; progress = initialValues[i] }
-            sliders[i] = initialValues[i]
-            bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
-                    sliders[i] = p
-                    repaint()
-                }
-
-                override fun onStartTrackingTouch(sb: SeekBar?) = Unit
-                override fun onStopTrackingTouch(sb: SeekBar?) = Unit
-            })
-            box.addView(bar)
-        }
-        repaint()
-
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setView(box)
-            .setPositiveButton("确定") { _, _ -> onPicked(OverlayPalette.toHex(current())) }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    private fun dp(v: Int): Int = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics
-    ).toInt()
 
     override fun onResume() {
         super.onResume()
@@ -570,8 +230,6 @@ class MainActivity : AppCompatActivity() {
             overlay.show()
         }
         syncStates()
-        // 用户可能刚去「安装未知应用」权限页开了权限，回来直接把安装界面续上。
-        resumePendingInstall()
         // 兜底刷新：部分 ROM 的权限写入是异步的，且回调可能缺失。
         // 在三个时间点各刷一次，把「明明开了却显示未开启」的窗口压到最短。
         // 挂在 mainHandler 上而不是 decorView 上，这样 onDestroy 的
@@ -599,13 +257,13 @@ class MainActivity : AppCompatActivity() {
         chip(tvOverlayStatus, overlayOn, "已开启", "未开启")
         chip(tvKeyStatus, keyOn, "已填写", "未填写")
         // 自启动查不到，只能反映省电策略，文案避免让人以为「已设置」= 自启动也开了。
-        chip(tvBatteryStatus, batteryOn, "省电已无限制", "未设置")
+        chip(findViewById(R.id.tvBatteryStatus), batteryOn, "省电已无限制", "未设置")
 
         // Once a step is done its button has no job left, so take it away.
         btnNotifyPerm.visibility = if (notifyOn) View.GONE else View.VISIBLE
         btnOverlayPerm.visibility = if (overlayOn) View.GONE else View.VISIBLE
         // 这一项包含自启动，无法确认真实状态，所以按钮一直保留供用户复查。
-        btnAutostart.text = if (batteryOn) "检查自启动" else "去开启"
+        findViewById<Button>(R.id.btnAutostart).text = if (batteryOn) "检查自启动" else "去开启"
 
         btnToggle.text = if (overlay.isShowing()) "隐藏悬浮窗" else "显示悬浮窗"
         btnToggle.isEnabled = notifyOn && overlayOn
@@ -620,16 +278,6 @@ class MainActivity : AppCompatActivity() {
             else -> "全部就绪"
         }
 
-        // Live queue readout, so the user can see the app is actually working
-        // even while the overlay is hidden.
-        val queue = MsgStore.size()
-        val urgent = MsgStore.countNow()
-        findViewById<TextView>(R.id.tvQueueCount).text = when {
-            queue == 0 -> "当前没有待处理的消息"
-            urgent > 0 -> "当前 $queue 条待处理，$urgent 条要马上回"
-            else -> "当前 $queue 条待处理"
-        }
-
         // "Nothing arrives" has two very different causes and they need
         // different fixes: the listener is not bound at all (re-grant
         // notification access / reboot), or it is bound and the chat app simply
@@ -642,12 +290,6 @@ class MainActivity : AppCompatActivity() {
             "监听服务：未连接（通常几秒内自动恢复）"
         }
         tvListenerStatus.setTextColor(Color.parseColor(if (bound) "#3B6D11" else "#A32D2D"))
-
-        // 自查用：把「系统给了几条通知」和「有几条进了列表」分开显示。
-        // 一直不动说明系统没把通知交过来；在涨但列表空说明是被过滤或立刻被移出了。
-        tvNotifyStats.text = "本次收到通知 ${NotificationListenerHolder.seenCount} 条，" +
-            "进入列表 ${NotificationListenerHolder.acceptedCount} 条，" +
-            "移出 ${NotificationListenerHolder.droppedCount} 条"
     }
 
     /**
@@ -656,9 +298,6 @@ class MainActivity : AppCompatActivity() {
      * 各家 ROM 的设置页入口都不一样，而且**没有公开 API 能读取或改写**
      * （小米的自启动属于私有权限）。所以这里只做「把你送到正确的那一页」，
      * 具体开关由用户自己确认——任何声称能自动开启的方案都是骗人的。
-     *
-     * 依次尝试：厂商自启动管理页 → 应用详情页（兜底，多数机器上能一站配完），
-     * 电池优化白名单则用 Android 官方的 REQUEST_IGNORE_BATTERY_OPTIMIZATIONS。
      */
     private fun showKeepAliveOptions() {
         val names = arrayOf("打开「自启动」设置", "关闭电池优化（省电无限制）", "打开本应用详情页")
@@ -716,7 +355,7 @@ class MainActivity : AppCompatActivity() {
      * 电池优化白名单。这是唯一有官方 API 的一项，用系统对话框请求豁免，
      * 用户点一下「允许」即可，不用自己去翻设置。
      */
-    @SuppressLint("BatteryLife")
+    @android.annotation.SuppressLint("BatteryLife")
     private fun openBatteryOptimization() {
         val pm = getSystemService(PowerManager::class.java)
         if (pm?.isIgnoringBatteryOptimizations(packageName) == true) {
@@ -730,9 +369,7 @@ class MainActivity : AppCompatActivity() {
             // 少数 ROM 移除了这个 action，退到电池优化列表。
             runCatching {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }.onFailure {
-                openAppDetails()
-            }
+            }.onFailure { openAppDetails() }
         }
     }
 
@@ -754,130 +391,6 @@ class MainActivity : AppCompatActivity() {
         getSystemService(PowerManager::class.java)
             ?.isIgnoringBatteryOptimizations(packageName) == true
 
-    // -- 在线更新 ------------------------------------------------------------
-
-    /**
-     * 检查 GitHub Releases 是否有新版本。
-     *
-     * 手动触发才给反馈：网络失败时明确说「检查失败」而不是沉默（用户主动点的，
-     * 静默会让人以为按钮坏了）。查到新版本则弹对话框，确认后开始下载。
-     */
-    private fun checkForUpdate() {
-        val btn = findViewById<Button>(R.id.btnCheckUpdate)
-        btn.isEnabled = false
-        btn.text = "检查中…"
-        thread(name = "update-check") {
-            // 分三种结果：查到新版本 / 已是最新 / 查不到（网络或接口问题）。
-            // 后两种都必须给话，否则用户点完没反应会以为按钮坏了。
-            var failed = false
-            val result = runCatching { UpdateChecker.check(this) }
-                .onFailure { Log.w("JEVPRIORITY", "update check: ${it.message}") }
-                .getOrElse { failed = true; null }
-            val current = UpdateChecker.currentVersionName(this)
-            runOnUiThread {
-                btn.isEnabled = true
-                btn.text = "检查更新"
-                when {
-                    failed -> Toast.makeText(
-                        this, "检查失败，请确认网络可用（GitHub 在国内可能不稳定）", Toast.LENGTH_LONG
-                    ).show()
-
-                    result != null -> confirmUpdate(result)
-                    // check() 返回 null 只代表「没有更新版本」
-                    else -> AlertDialog.Builder(this)
-                        .setTitle("已是最新版本")
-                        .setMessage("当前 v$current")
-                        .setPositiveButton("好", null)
-                        .show()
-                }
-            }
-        }
-    }
-
-    private fun confirmUpdate(info: UpdateChecker.Result) {
-        val message = buildString {
-            append("当前 v").append(info.currentTag.removePrefix("v"))
-            append("，最新 ").append(info.latestTag).append("\n\n")
-            if (info.notes.isNotBlank()) append(info.notes)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("发现新版本")
-            .setMessage(message)
-            .setPositiveButton("立即更新") { _, _ -> startDownload(info) }
-            .setNegativeButton("以后再说", null)
-            .show()
-    }
-
-    /**
-     * 下载并安装。下载在子线程，进度用系统通知栏展示 —— 用户常在这时候切出去，
-     * 用 Toast 或对话框都会被系统销毁。
-     */
-    private fun startDownload(info: UpdateChecker.Result) {
-        val dest = java.io.File(UpdateChecker.updateDir(this), "xianhui.apk")
-        if (dest.exists()) dest.delete()
-
-        val nm = getSystemService(NotificationManager::class.java)
-        val channelId = "jev_update"
-        if (nm.getNotificationChannel(channelId) == null) {
-            nm.createNotificationChannel(
-                NotificationChannel(channelId, "版本更新", NotificationManager.IMPORTANCE_LOW)
-            )
-        }
-        val notifyId = 2001
-
-        fun showProgress(pct: Int) {
-            val bar = if (pct < 0) NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("正在下载更新")
-                .setProgress(0, 0, true)
-            else NotificationCompat.Builder(this, channelId)
-                .setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("正在下载更新")
-                .setProgress(100, pct, false)
-            runCatching {
-                nm.notify(notifyId, bar.setOngoing(true).setOnlyAlertOnce(true).build())
-            }
-        }
-
-        Toast.makeText(this, "已开始下载，可在通知栏查看进度", Toast.LENGTH_SHORT).show()
-
-        thread(name = "update-download") {
-            val ok = runCatching {
-                UpdateChecker.download(info.downloadUrl, dest) { pct -> showProgress(pct) }
-                dest.length() > 0
-            }.onFailure {
-                Log.w("JEVPRIORITY", "update download failed: ${it.message}")
-            }.getOrDefault(false)
-
-            runOnUiThread {
-                runCatching { nm.cancel(notifyId) }
-                if (!ok) {
-                    Toast.makeText(this, "下载失败，请稍后重试", Toast.LENGTH_LONG).show()
-                    return@runOnUiThread
-                }
-                UpdateChecker.install(this, dest)
-                // 从「未知来源安装」设置页回来时，重装一次自动弹出安装界面。
-                pendingApk = dest
-            }
-        }
-    }
-
-    /** 下载完但用户还没装上的包，等从权限页返回后自动续上。 */
-    private var pendingApk: java.io.File? = null
-
-    private fun resumePendingInstall() {
-        val apk = pendingApk ?: return
-        if (!apk.exists()) {
-            pendingApk = null
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !packageManager.canRequestPackageInstalls()
-        ) return
-        pendingApk = null
-        UpdateChecker.install(this, apk)
-    }
-
     private fun chip(view: TextView, ok: Boolean, okText: String, todoText: String) {
         view.text = if (ok) okText else todoText
         view.setTextColor(Color.parseColor(if (ok) "#3B6D11" else "#A32D2D"))
@@ -889,24 +402,6 @@ class MainActivity : AppCompatActivity() {
     private fun dot(hex: String): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.OVAL
         setColor(Color.parseColor(hex))
-    }
-
-    private fun showTest(message: String, ok: Boolean) {
-        tvTestResult.visibility = View.VISIBLE
-        tvTestResult.text = message
-        tvTestResult.setTextColor(Color.parseColor(if (ok) "#3B6D11" else "#A32D2D"))
-    }
-
-    /**
-     * The switch changes what "监听" means, so the line under it has to spell
-     * out the active mode — the label alone cannot.
-     */
-    private fun refreshBackgroundHint(tv: TextView) {
-        tv.text = if (prefs.backgroundOnly) {
-            "只监听后台消息；停在微信里收到的消息不进列表。"
-        } else {
-            "停在微信里或切到后台，都照常监听。"
-        }
     }
 
     private fun requestPostNotificationsOnce() {

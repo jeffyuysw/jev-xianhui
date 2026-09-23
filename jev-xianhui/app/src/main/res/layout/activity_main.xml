@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    设置页：四步配置 + 运行开关 + 外观。
+    主页：只做「权限引导 + 状态 + 两个常用操作」。
 
-    文案一律压到最短：每行说明只讲「这一步为什么必须做」，
-    操作路径交给按钮跳转，长篇解释留在 README，不占手机屏幕。
+    API Key、运行开关、悬浮窗外观都搬到了设置页（右上角「设置」进入），
+    所以这一屏很短，不用来回滑动。边距压到 12dp。
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -17,26 +17,79 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="18dp">
+        android:padding="12dp">
 
-        <TextView
+        <!-- 顶栏：品牌名 + 副名 + 两个入口 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="先回"
-            android:textColor="#2C2C2A"
-            android:textSize="24sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <!-- 状态总览 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="先回"
+                android:textColor="#2C2C2A"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_marginEnd="5dp"
+                android:text="|"
+                android:textColor="#D3D1C7"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="消息优先级助手"
+                android:textColor="#888780"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnSettings"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="36dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="设置"
+                android:textColor="#5F5E5A"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btnHistory"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="0dp"
+                android:minHeight="36dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:text="分析记录"
+                android:textColor="#5F5E5A"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 状态总览：一句话结论 + 监听服务真实状态 -->
         <LinearLayout
             android:id="@+id/statusBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_status"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="14dp">
+            android:padding="12dp">
 
             <View
                 android:id="@+id/statusDot"
@@ -44,16 +97,32 @@
                 android:layout_height="9dp"
                 android:background="@drawable/bg_dot_idle" />
 
-            <TextView
-                android:id="@+id/tvStatusSummary"
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="10dp"
                 android:layout_weight="1"
-                android:text="正在检查权限…"
-                android:textColor="#2C2C2A"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvStatusSummary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="正在检查权限…"
+                    android:textColor="#2C2C2A"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvListenerStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text=""
+                    android:textColor="#888780"
+                    android:textSize="11sp" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- 第一步：通知使用权 -->
@@ -61,10 +130,10 @@
             android:id="@+id/cardNotify"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -100,17 +169,17 @@
                 android:id="@+id/tvNotifyHint"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:lineSpacingExtra="2dp"
                 android:text="读通知栏，不读聊天记录。只能手动授权。"
                 android:textColor="#888780"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <Button
                 android:id="@+id/btnNotifyPerm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:text="去开启" />
         </LinearLayout>
 
@@ -119,10 +188,10 @@
             android:id="@+id/cardOverlay"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -157,28 +226,28 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:text="显示判断结果的地方。"
                 android:textColor="#888780"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <Button
                 android:id="@+id/btnOverlayPerm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:text="去开启" />
         </LinearLayout>
 
-        <!-- 第三步：API Key -->
+        <!-- 第三步：API Key（输入在设置页，这里只显示状态） -->
         <LinearLayout
             android:id="@+id/cardKey"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -210,50 +279,20 @@
                     android:textSize="11sp" />
             </LinearLayout>
 
-            <EditText
-                android:id="@+id/etApiKey"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_input"
-                android:hint="sk-or-v1-..."
-                android:importantForAutofill="no"
-                android:inputType="textPassword"
-                android:padding="12dp"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnSave"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="保存" />
-
-                <Button
-                    android:id="@+id/btnTest"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:text="测试" />
-            </LinearLayout>
-
             <TextView
-                android:id="@+id/tvTestResult"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:lineSpacingExtra="2dp"
-                android:text=""
-                android:textColor="#3B6D11"
-                android:textSize="12sp"
-                android:visibility="gone" />
+                android:layout_marginTop="4dp"
+                android:text="驱动判断的密钥，在设置页填写。"
+                android:textColor="#888780"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnKeyPerm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="去配置" />
         </LinearLayout>
 
         <!-- 第四步：自启动 + 省电无限制 -->
@@ -261,10 +300,10 @@
             android:id="@+id/cardAutostart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -299,357 +338,49 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:lineSpacingExtra="2dp"
                 android:text="小米 / HyperOS 必做，否则服务被冻结、读不到消息。"
                 android:textColor="#888780"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <Button
                 android:id="@+id/btnAutostart"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:text="去开启" />
         </LinearLayout>
 
-        <!-- 运行 -->
+        <!-- 常用操作 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="运行"
-                android:textColor="#2C2C2A"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <!-- 监听服务的真实连接状态：区分"没连上"和"微信根本没发通知" -->
-            <TextView
-                android:id="@+id/tvListenerStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:lineSpacingExtra="2dp"
-                android:text=""
-                android:textColor="#888780"
-                android:textSize="12sp" />
-
-            <!-- 收不到消息时用来自查：收到多少条通知、其中多少条进了列表 -->
-            <TextView
-                android:id="@+id/tvNotifyStats"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:lineSpacingExtra="2dp"
-                android:text=""
-                android:textColor="#888780"
-                android:textSize="12sp" />
-
-            <CheckBox
-                android:id="@+id/cbWechat"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:checked="true"
-                android:minHeight="40dp"
-                android:text="微信"
-                android:textColor="#2C2C2A"
-                android:textSize="14sp" />
-
-            <CheckBox
-                android:id="@+id/cbQQ"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:minHeight="40dp"
-                android:text="QQ"
-                android:textColor="#2C2C2A"
-                android:textSize="14sp" />
-
-            <CheckBox
-                android:id="@+id/cbAutoJudge"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:checked="true"
-                android:minHeight="40dp"
-                android:text="收到即判断"
-                android:textColor="#2C2C2A"
-                android:textSize="14sp" />
-
-            <CheckBox
-                android:id="@+id/cbBackgroundOnly"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="40dp"
-                android:text="仅后台监听"
-                android:textColor="#2C2C2A"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/tvBackgroundHint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp"
-                android:lineSpacingExtra="2dp"
-                android:text=""
-                android:textColor="#888780"
-                android:textSize="12sp" />
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
 
             <Button
                 android:id="@+id/btnToggleOverlay"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_weight="1"
                 android:text="显示悬浮窗" />
 
             <Button
                 android:id="@+id/btnClear"
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
                 android:text="清空列表" />
-
-            <TextView
-                android:id="@+id/tvQueueCount"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:text=""
-                android:textColor="#888780"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <!-- 悬浮窗外观 -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="悬浮窗外观"
-                android:textColor="#2C2C2A"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="改动立即生效"
-                android:textColor="#888780"
-                android:textSize="12sp" />
-
-            <!-- 背景色 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="背景色"
-                android:textColor="#5F5E5A"
-                android:textSize="13sp" />
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/rowBgPresets"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
-            </HorizontalScrollView>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvBgValue"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="#FFFFFF"
-                    android:textColor="#5F5E5A"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/btnBgPick"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="0dp"
-                    android:minHeight="32dp"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="自定义"
-                    android:textColor="#2C2C2A"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <!-- 文字色 -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="文字色"
-                android:textColor="#5F5E5A"
-                android:textSize="13sp" />
-
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:scrollbars="none">
-
-                <LinearLayout
-                    android:id="@+id/rowFgPresets"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal" />
-            </HorizontalScrollView>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvFgValue"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="#2C2C2A"
-                    android:textColor="#5F5E5A"
-                    android:textSize="12sp" />
-
-                <Button
-                    android:id="@+id/btnFgPick"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:minWidth="0dp"
-                    android:minHeight="32dp"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="自定义"
-                    android:textColor="#2C2C2A"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <!-- 字号 -->
-            <TextView
-                android:id="@+id/tvFontLabel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="字号 12sp"
-                android:textColor="#5F5E5A"
-                android:textSize="13sp" />
-
-            <SeekBar
-                android:id="@+id/sbFont"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp" />
-
-            <!-- 宽度 -->
-            <TextView
-                android:id="@+id/tvWidthLabel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="宽度 220dp"
-                android:textColor="#5F5E5A"
-                android:textSize="13sp" />
-
-            <SeekBar
-                android:id="@+id/sbWidth"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp" />
-
-            <!-- 不透明度 -->
-            <TextView
-                android:id="@+id/tvOpacityLabel"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="不透明度 100%"
-                android:textColor="#5F5E5A"
-                android:textSize="13sp" />
-
-            <SeekBar
-                android:id="@+id/sbOpacity"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp" />
-
-            <TextView
-                android:id="@+id/tvAppearanceWarn"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:lineSpacingExtra="2dp"
-                android:text=""
-                android:textColor="#A32D2D"
-                android:textSize="12sp"
-                android:visibility="gone" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnSwapColors"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="黑白反转"
-                    android:textColor="#2C2C2A"
-                    android:textSize="13sp" />
-
-                <Button
-                    android:id="@+id/btnResetAppearance"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:text="恢复默认"
-                    android:textColor="#2C2C2A"
-                    android:textSize="13sp" />
-            </LinearLayout>
         </LinearLayout>
 
         <!-- 底部：产品名 + 版本号 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:layout_marginBottom="10dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="8dp"
             android:gravity="center"
             android:orientation="vertical">
 
@@ -666,24 +397,21 @@
                 android:id="@+id/tvVersion"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:text=""
                 android:textColor="#B4B2A9"
                 android:textSize="11sp" />
 
-            <Button
-                android:id="@+id/btnCheckUpdate"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/tvBrand"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:minWidth="0dp"
-                android:minHeight="32dp"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:text="检查更新"
-                android:textColor="#5F5E5A"
-                android:textSize="12sp" />
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:lineSpacingExtra="2dp"
+                android:text="全网（X / 小红书 / TikTok / 抖音 / B站）搜「小张AI工坊」"
+                android:textColor="#B4B2A9"
+                android:textSize="11sp" />
         </LinearLayout>
 
     </LinearLayout>

@@ -38,6 +38,12 @@ data class MsgItem(
      */
     var sbnKey: String = ""
 
+    /**
+     * 本机判断记录（MsgHistoryDb）里那一行的 id，判断完成后按它回填结果。
+     * -1 表示没有记录（比如手动测试的探针消息，不进历史）。
+     */
+    var historyId: Long = -1L
+
     val bucket: Bucket
         get() = when {
             !judged -> Bucket.PENDING

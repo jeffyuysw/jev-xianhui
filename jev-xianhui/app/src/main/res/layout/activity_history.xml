@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    分析记录：来源 / 联系人 / 内容 / 判断状态 / 时间。
+
+    用 ListView 而不是 RecyclerView：少一个依赖，构建不必联网取包，
+    而这里的数据量和交互复杂度也用不上 RecyclerView 的能力。
+    往下滚到底会自动续加载下一页。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F7F6F3"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- 顶栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="分析记录"
+            android:textColor="#2C2C2A"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnClearHistory"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="36dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="清空"
+            android:textColor="#A32D2D"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnBack"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minWidth="0dp"
+            android:minHeight="36dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="返回"
+            android:textColor="#5F5E5A"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvHistoryHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="6dp"
+        android:text="只保存在本机，最多保留最近 2000 条。"
+        android:textColor="#888780"
+        android:textSize="11sp" />
+
+    <!-- 状态筛选。固定写在这里而不是代码动态生成：样式统一、可测，
+         选中态由代码切换背景与字色。 -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="8dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/rowFilters"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/chipNow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_chip_filter_on"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="马上回"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/chipSoon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_chip_filter_off"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="尽快"
+                android:textColor="#5F5E5A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/chipLater"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_chip_filter_off"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="可晚点"
+                android:textColor="#5F5E5A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/chipPending"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_chip_filter_off"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="判断中"
+                android:textColor="#5F5E5A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/chipFailed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_chip_filter_off"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="失败"
+                android:textColor="#5F5E5A"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/chipAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_chip_filter_off"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
+                android:text="全部"
+                android:textColor="#5F5E5A"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <ListView
+        android:id="@+id/lvHistory"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="#F7F6F3"
+        android:dividerHeight="8dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:scrollbars="none" />
+
+    <TextView
+        android:id="@+id/tvEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="还没有记录\n收到消息后，这里会留下判断过的每一条"
+        android:textColor="#B4B2A9"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/tvFooter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="6dp"
+        android:paddingBottom="10dp"
+        android:text=""
+        android:textColor="#B4B2A9"
+        android:textSize="11sp" />
+
+</LinearLayout>

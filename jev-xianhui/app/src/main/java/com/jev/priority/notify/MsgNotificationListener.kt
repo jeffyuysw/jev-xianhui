@@ -9,6 +9,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.jev.priority.core.MsgHistoryDb
 import com.jev.priority.core.MsgItem
 import com.jev.priority.core.MsgStore
 import com.jev.priority.core.Prefs
@@ -29,10 +30,12 @@ import kotlin.concurrent.thread
 class MsgNotificationListener : NotificationListenerService() {
 
     private lateinit var prefs: Prefs
+    private lateinit var history: MsgHistoryDb
 
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
+        history = MsgHistoryDb.get(this)
         NotificationListenerHolder.instance = this
     }
 
@@ -106,6 +109,11 @@ class MsgNotificationListener : NotificationListenerService() {
         )
         item.contentIntent = n.contentIntent
         item.sbnKey = sbn.key
+
+        // 先落一条「判断中」的记录，判断完成后回填结果。这样即使判断失败，
+        // 记录页里也能看出这条消息来过、只是没判成功。
+        item.historyId = history.insertPending(item)
+        history.trim(MsgHistoryDb.MAX_RECORDS)
 
         MsgStore.upsert(item)
         NotificationListenerHolder.acceptedCount++
@@ -252,6 +260,7 @@ class MsgNotificationListener : NotificationListenerService() {
                 item.error = e.message
             } finally {
                 item.judging = false
+                history.fillResult(item.historyId, item)
                 MsgStore.notifyChange()
             }
         }
