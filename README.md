@@ -8,7 +8,7 @@
 | 平台 | 目录 | 怎么读消息 | 可监听的应用 | 系统要求 | 状态 |
 | --- | --- | --- | --- | --- | --- |
 | **Android** | [`jev-xianhui/`](jev-xianhui/) | 官方 `NotificationListenerService` 读系统通知 | 微信、QQ、飞书（飞书暂未测试） | Android 8.0+（minSdk 26） | ✅ 可用 |
-| **Windows** | — | 截取微信窗口 + 本地离线 OCR | 微信 | Windows 10 / 11 64 位 | 🚧 **待修复中** |
+| **Windows** | <a href="https://github.com/jeffyuysw/jev-xianhui-windows" target="_blank">jev-xianhui-windows/</a> | 截取微信窗口 + 本地离线 OCR | 微信 | Windows 10 / 11 64 位 | ✅ 可用 |
 
 ```
     ╭──────────────────────╮
@@ -212,7 +212,7 @@ A：通知里只有开头一截，看不到完整上下文。对「要不要马�
 A：跳转行为取决于各 App 自己构造的通知 `contentIntent`。以「点系统通知栏的行为」为准；个别机型需开「后台弹出界面」权限。
 
 **Q：什么时候有 Windows 版？**
-A：Windows 版正在修复中，修好会恢复发布并更新这份文档。
+A：已经有了，独立仓库：<a href="https://github.com/jeffyuysw/jev-xianhui-windows" target="_blank">jeffyuysw/jev-xianhui-windows</a>。下载 `XianHui-Setup.exe` 安装即可。注意 Windows 没有系统级消息通知接口，只能截取微信窗口做本地识别，**微信窗口必须保持可见（不要最小化）**。
 
 </details>
 
