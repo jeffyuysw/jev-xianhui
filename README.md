@@ -10,6 +10,12 @@
 | **Android** | [`jev-xianhui/`](jev-xianhui/) | 官方 `NotificationListenerService` 读系统通知 | 微信、QQ、飞书（飞书暂未测试） | Android 8.0+（minSdk 26） | ✅ 可用 |
 | **Windows** | <a href="https://github.com/jeffyuysw/jev-xianhui-windows" target="_blank">jev-xianhui-windows/</a> | 截取微信窗口 + 本地离线 OCR | 微信 | Windows 10 / 11 64 位 | ✅ 可用 |
 
+### 两个平台怎么读消息
+
+同一套判断口径，两条完全不同的采集路径：
+
+![安卓读系统通知，Windows 截屏 + OCR](docs/img/platforms.jpg)
+
 ```
     ╭──────────────────────╮
     │ 要马上回  ②       —  ×│   ← 按住这条拖动，松手自动贴边
